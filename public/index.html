@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#060713" />
+  <title>Nebula Drift</title>
+  <style>
+    :root { color-scheme: dark; --fg:#f8fbff; --muted:#a6b4d8; --cyan:#6ef7ff; --pink:#ff4fd8; --gold:#ffd36e; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#050611; color:var(--fg); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; touch-action:none; }
+    canvas { position:fixed; inset:0; width:100vw; height:100vh; display:block; background:#050611; }
+    .hud { position:fixed; inset: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); pointer-events:none; padding:18px; display:grid; grid-template-rows:auto 1fr auto; gap:12px; }
+    .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+    .brand { display:grid; gap:4px; text-shadow:0 0 20px rgba(110,247,255,.35); }
+    .title { font-weight:800; letter-spacing:.12em; font-size:13px; text-transform:uppercase; }
+    .subtitle { color:var(--muted); font-size:12px; }
+    .stats { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .stat { min-width:74px; padding:8px 10px; border:1px solid rgba(255,255,255,.14); border-radius:16px; background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.045)); box-shadow:0 8px 32px rgba(0,0,0,.25), inset 0 1px rgba(255,255,255,.18); backdrop-filter: blur(12px); }
+    .label { color:var(--muted); font-size:10px; letter-spacing:.12em; text-transform:uppercase; }
+    .value { margin-top:2px; font-variant-numeric:tabular-nums; font-size:18px; font-weight:750; }
+    .center { display:grid; place-items:center; }
+    .card { pointer-events:auto; width:min(520px, calc(100vw - 36px)); padding:24px; border:1px solid rgba(255,255,255,.16); border-radius:28px; background:radial-gradient(circle at 20% 0%, rgba(110,247,255,.22), transparent 42%), linear-gradient(180deg, rgba(10,12,30,.78), rgba(7,8,20,.58)); box-shadow:0 24px 90px rgba(0,0,0,.55), inset 0 1px rgba(255,255,255,.16); backdrop-filter: blur(18px) saturate(140%); text-align:center; }
+    .card[hidden] { display:none; }
+    h1 { margin:0; font-size:clamp(42px, 11vw, 72px); line-height:.9; letter-spacing:-.08em; text-transform:uppercase; background:linear-gradient(100deg, #fff, #6ef7ff 35%, #ff4fd8 70%, #ffd36e); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 0 28px rgba(110,247,255,.24)); }
+    .card p { color:#d9e4ff; line-height:1.5; margin:14px 0 20px; }
+    .actions { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+    button { appearance:none; border:0; border-radius:999px; padding:13px 18px; color:#06101a; font-weight:800; background:linear-gradient(135deg, #6ef7ff, #ff4fd8); box-shadow:0 0 26px rgba(110,247,255,.25); cursor:pointer; }
+    button.secondary { color:#f8fbff; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18); }
+    .bottom { display:flex; justify-content:space-between; align-items:flex-end; gap:14px; }
+    .hint { color:rgba(220,230,255,.74); font-size:12px; line-height:1.4; max-width:260px; text-shadow:0 1px 12px #000; }
+    .boost { pointer-events:auto; width:82px; height:82px; border-radius:50%; display:grid; place-items:center; color:#fff; font-weight:900; font-size:12px; letter-spacing:.08em; text-transform:uppercase; background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.28), transparent 28%), linear-gradient(135deg, rgba(255,79,216,.95), rgba(110,247,255,.84)); border:1px solid rgba(255,255,255,.3); box-shadow:0 0 40px rgba(255,79,216,.28), inset 0 0 24px rgba(255,255,255,.14); }
+    .boost:active, .boost.active { transform:scale(.96); filter:brightness(1.18); }
+    @media (max-width: 680px) { .hud { padding:14px; } .stats { max-width:180px; } .stat { min-width:70px; padding:7px 9px; } .value { font-size:16px; } .hint { font-size:11px; max-width:190px; } .boost { width:76px; height:76px; } }
+  </style>
+</head>
+<body>
+  <canvas id="game" aria-label="Nebula Drift game canvas"></canvas>
+  <div class="hud">
+    <div class="top">
+      <div class="brand"><div class="title">Nebula Drift</div><div class="subtitle">drag to steer · collect plasma · avoid rocks</div></div>
+      <div class="stats">
+        <div class="stat"><div class="label">Score</div><div id="score" class="value">0</div></div>
+        <div class="stat"><div class="label">Flux</div><div id="flux" class="value">1.0×</div></div>
+        <div class="stat"><div class="label">Best</div><div id="best" class="value">0</div></div>
+      </div>
+    </div>
+    <div class="center">
+      <section id="startCard" class="card">
+        <h1>Nebula<br>Drift</h1>
+        <p>Thread the ship through a living particle storm. Chain plasma shards to raise your flux multiplier, then boost through impossible gaps.</p>
+        <div class="actions"><button id="playButton">Launch</button><button id="howButton" class="secondary">How to play</button></div>
+      </section>
+      <section id="overCard" class="card" hidden>
+        <h1>Signal<br>Lost</h1>
+        <p id="overText">You drifted too close to a rogue rock.</p>
+        <div class="actions"><button id="againButton">Run it back</button></div>
+      </section>
+    </div>
+    <div class="bottom"><div class="hint" id="hint">Phone: drag anywhere to steer. Tap BOOST when the meter glows. Desktop: mouse + Space.</div><button id="boost" class="boost">Boost</button></div>
+  </div>
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const scoreEl = document.getElementById('score');
+  const fluxEl = document.getElementById('flux');
+  const bestEl = document.getElementById('best');
+  const startCard = document.getElementById('startCard');
+  const overCard = document.getElementById('overCard');
+  const overText = document.getElementById('overText');
+  const boostButton = document.getElementById('boost');
+  const playButton = document.getElementById('playButton');
+  const againButton = document.getElementById('againButton');
+  const howButton = document.getElementById('howButton');
+  const hint = document.getElementById('hint');
+
+  const DPR = Math.min(devicePixelRatio || 1, 2);
+  let W = 0, H = 0, t = 0, last = performance.now();
+  let state = 'menu', score = 0, best = Number(localStorage.getItem('nebula-best') || 0), flux = 1, chain = 0;
+  let asteroids = [], shards = [], sparks = [], stars = [], ripples = [];
+  const pointer = { active:false, x:0, y:0 };
+  const ship = { x:0, y:0, tx:0, ty:0, r:15, shield:0, boost:1, invuln:0 };
+
+  const rand = (a=1,b=0)=> b + Math.random()*(a-b);
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const dist2 = (a,b,c,d)=>{ const x=a-c, y=b-d; return x*x+y*y; };
+
+  function resize() {
+    W = innerWidth; H = innerHeight;
+    canvas.width = Math.floor(W * DPR); canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    ship.x ||= W*.5; ship.y ||= H*.72; ship.tx = ship.x; ship.ty = ship.y;
+    stars = Array.from({length: Math.floor((W*H)/5200)}, () => ({ x:rand(W), y:rand(H), z:rand(1,.15), h:rand(320,175), p:rand(Math.PI*2) }));
+  }
+
+  function reset() {
+    state = 'playing'; score = 0; flux = 1; chain = 0; t = 0;
+    asteroids = []; shards = []; sparks = []; ripples = [];
+    Object.assign(ship, { x:W*.5, y:H*.72, tx:W*.5, ty:H*.72, shield:0, boost:1, invuln:1.4 });
+    startCard.hidden = true; overCard.hidden = true;
+  }
+
+  function gameOver(reason) {
+    if (state !== 'playing') return;
+    state = 'over';
+    best = Math.max(best, Math.floor(score)); localStorage.setItem('nebula-best', best);
+    overText.textContent = `${reason} Score ${Math.floor(score).toLocaleString()} · best ${best.toLocaleString()}`;
+    overCard.hidden = false;
+    burst(ship.x, ship.y, 90, '#ff4fd8', 8);
+  }
+
+  function spawnShard() {
+    shards.push({ x:rand(W-50,50), y:-24, r:rand(10,7), vy:rand(120,80), spin:rand(7,-7), a:rand(Math.PI*2), hue:rand(195,175) });
+  }
+  function spawnAsteroid() {
+    const r = rand(42,18) * Math.min(1.15, Math.max(.75, W/430));
+    asteroids.push({ x:rand(W-r,r), y:-r-20, r, vx:rand(36,-36), vy:rand(170,100) + t*3.2, rot:rand(Math.PI*2), spin:rand(1.9,-1.9), seed:rand(999), hue:rand(325,250) });
+  }
+  function burst(x,y,n,color,power=3) {
+    for (let i=0;i<n;i++) { const a=rand(Math.PI*2), v=rand(power*52,power*8); sparks.push({ x,y, vx:Math.cos(a)*v, vy:Math.sin(a)*v, life:rand(.9,.25), max:1, color, size:rand(4,1) }); }
+    ripples.push({x,y,r:4,life:.65,color});
+  }
+
+  function drawBackground(dt) {
+    const g = ctx.createRadialGradient(W*.5,H*.45,0,W*.5,H*.45,Math.max(W,H));
+    g.addColorStop(0, '#111a3a'); g.addColorStop(.42, '#08091a'); g.addColorStop(1, '#03040b');
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (const s of stars) {
+      s.y += (24 + s.z*80) * dt; if (s.y > H+10) { s.y=-10; s.x=rand(W); }
+      const pulse = .55 + .45*Math.sin(t*2 + s.p);
+      ctx.fillStyle = `hsla(${s.h}, 100%, ${70 + pulse*20}%, ${.18 + s.z*.55})`;
+      ctx.beginPath(); ctx.arc(s.x, s.y, 0.6 + s.z*1.8, 0, Math.PI*2); ctx.fill();
+    }
+    for (let i=0;i<7;i++) {
+      const y = (H*.18 + i*H*.12 + Math.sin(t*.35+i)*28) % H;
+      const grad = ctx.createLinearGradient(0,y,W,y+80);
+      grad.addColorStop(0, 'rgba(110,247,255,0)'); grad.addColorStop(.5, `rgba(${i%2?255:110},${i%2?79:247},${i%2?216:255},0.045)`); grad.addColorStop(1, 'rgba(255,79,216,0)');
+      ctx.fillStyle = grad; ctx.fillRect(0,y,W,90);
+    }
+    ctx.restore();
+  }
+
+  function drawShip(dt) {
+    const speed = ship.boost > .05 ? 15 : 9;
+    ship.x += (ship.tx - ship.x) * clamp(dt*speed,0,1); ship.y += (ship.ty - ship.y) * clamp(dt*speed,0,1);
+    ship.x = clamp(ship.x, 24, W-24); ship.y = clamp(ship.y, 60, H-24);
+    if (ship.invuln > 0) ship.invuln -= dt;
+    if (ship.boost > .05) ship.boost = Math.max(0, ship.boost - dt*.55); else ship.boost = Math.min(1, ship.boost + dt*.18);
+    boostButton.classList.toggle('active', ship.boost > .05 && pointer.boosting);
+    boostButton.style.opacity = .48 + ship.boost*.52;
+
+    const ang = Math.atan2(ship.ty-ship.y, ship.tx-ship.x) || -Math.PI/2;
+    ctx.save(); ctx.translate(ship.x, ship.y); ctx.rotate(ang + Math.PI/2); ctx.globalCompositeOperation = 'lighter';
+    const flame = 18 + Math.sin(t*22)*7 + (ship.boost > .05 ? 26 : 0);
+    const fg = ctx.createLinearGradient(0,12,0,flame+32); fg.addColorStop(0,'rgba(110,247,255,.65)'); fg.addColorStop(.5,'rgba(255,79,216,.26)'); fg.addColorStop(1,'rgba(255,211,110,0)');
+    ctx.fillStyle = fg; ctx.beginPath(); ctx.moveTo(-8,12); ctx.lineTo(0,flame+32); ctx.lineTo(8,12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.strokeStyle = 'rgba(110,247,255,.9)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,-22); ctx.lineTo(15,18); ctx.quadraticCurveTo(0,10,-15,18); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(8,12,35,.82)'; ctx.beginPath(); ctx.ellipse(0,-5,6,10,0,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    if (ship.invuln > 0) { ctx.strokeStyle='rgba(110,247,255,.55)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(ship.x,ship.y,ship.r+12+Math.sin(t*18)*4,0,Math.PI*2); ctx.stroke(); }
+  }
+
+  function drawAsteroid(a) {
+    ctx.save(); ctx.translate(a.x,a.y); ctx.rotate(a.rot); ctx.globalCompositeOperation='lighter';
+    const grad=ctx.createRadialGradient(-a.r*.35,-a.r*.3,2,0,0,a.r*1.3); grad.addColorStop(0,`hsla(${a.hue},90%,74%,.72)`); grad.addColorStop(.45,'rgba(91,67,128,.62)'); grad.addColorStop(1,'rgba(8,8,22,.9)');
+    ctx.fillStyle=grad; ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    for (let i=0;i<13;i++){ const th=i/13*Math.PI*2; const rr=a.r*(.78+.22*Math.sin(i*2.17+a.seed)); const x=Math.cos(th)*rr, y=Math.sin(th)*rr; if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawShard(s) {
+    ctx.save(); ctx.translate(s.x,s.y); ctx.rotate(s.a); ctx.globalCompositeOperation='lighter';
+    ctx.shadowBlur=20; ctx.shadowColor=`hsl(${s.hue},100%,70%)`; ctx.fillStyle=`hsla(${s.hue},100%,68%,.96)`;
+    ctx.beginPath(); ctx.moveTo(0,-s.r*1.5); ctx.lineTo(s.r,s.r*.2); ctx.lineTo(0,s.r*1.5); ctx.lineTo(-s.r,s.r*.2); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  function update(dt) {
+    if (state === 'playing') {
+      t += dt; score += dt * 12 * flux;
+      if (Math.random() < dt*(.72 + t*.018)) spawnAsteroid();
+      if (Math.random() < dt*(.95 + t*.01)) spawnShard();
+      for (const a of asteroids) { a.x += a.vx*dt + Math.sin(t+a.seed)*18*dt; a.y += a.vy*dt; a.rot += a.spin*dt; }
+      for (const s of shards) { s.y += s.vy*dt; s.a += s.spin*dt; }
+      asteroids = asteroids.filter(a => a.y < H+a.r+50);
+      shards = shards.filter(s => s.y < H+40);
+      for (const s of shards) if (!s.hit && dist2(ship.x,ship.y,s.x,s.y) < (ship.r+s.r+8)**2) { s.hit=true; chain++; flux=clamp(1+chain*.12,1,5); score += 80*flux; burst(s.x,s.y,24,`hsl(${s.hue},100%,70%)`,3); }
+      shards = shards.filter(s => !s.hit);
+      for (const a of asteroids) if (ship.invuln <= 0 && dist2(ship.x,ship.y,a.x,a.y) < (ship.r+a.r*.72)**2) gameOver('You drifted too close to a rogue rock.');
+      if (ship.boost > .05 && pointer.boosting) { score += dt*42*flux; for (const a of asteroids) if (dist2(ship.x,ship.y,a.x,a.y) < (ship.r+a.r+26)**2) { a.y += 90*dt; } }
+    } else { t += dt*.45; }
+    for (const p of sparks) { p.x += p.vx*dt; p.y += p.vy*dt; p.vx*=.985; p.vy*=.985; p.life -= dt; }
+    sparks = sparks.filter(p => p.life > 0);
+    for (const r of ripples) { r.r += 190*dt; r.life -= dt; }
+    ripples = ripples.filter(r => r.life > 0);
+  }
+
+  function drawFx() {
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    for (const r of ripples) { ctx.strokeStyle=r.color.replace(')',`,${Math.max(0,r.life)})`).replace('hsl','hsla'); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,Math.PI*2); ctx.stroke(); }
+    for (const p of sparks) { ctx.fillStyle=p.color; ctx.globalAlpha=Math.max(0,p.life); ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill(); }
+    ctx.restore(); ctx.globalAlpha=1;
+  }
+
+  function render(now) {
+    const dt = Math.min(.033, (now-last)/1000); last = now;
+    update(dt); drawBackground(dt);
+    for (const s of shards) drawShard(s);
+    for (const a of asteroids) drawAsteroid(a);
+    drawFx(); drawShip(dt);
+    scoreEl.textContent = Math.floor(score).toLocaleString(); fluxEl.textContent = flux.toFixed(1)+'×'; bestEl.textContent = best.toLocaleString();
+    requestAnimationFrame(render);
+  }
+
+  function setTarget(x,y){ pointer.x=x; pointer.y=y; ship.tx=x; ship.ty=y; }
+  addEventListener('pointerdown', e => { if (e.target.closest('button')) return; pointer.active=true; setTarget(e.clientX,e.clientY); });
+  addEventListener('pointermove', e => { if(pointer.active) setTarget(e.clientX,e.clientY); });
+  addEventListener('pointerup', () => { pointer.active=false; pointer.boosting=false; });
+  boostButton.addEventListener('pointerdown', e => { e.preventDefault(); pointer.boosting = true; });
+  boostButton.addEventListener('pointerup', () => pointer.boosting = false);
+  boostButton.addEventListener('pointercancel', () => pointer.boosting = false);
+  addEventListener('keydown', e => { if (e.code === 'Space') pointer.boosting = true; if (e.key.toLowerCase()==='p') state = state === 'playing' ? 'paused' : 'playing'; });
+  addEventListener('keyup', e => { if (e.code === 'Space') pointer.boosting = false; });
+  playButton.onclick = reset; againButton.onclick = reset; howButton.onclick = () => { hint.textContent = 'Collect bright diamonds to raise FLUX. Boost near rocks for bonus points — but one collision ends the run.'; };
+  addEventListener('resize', resize, { passive:true });
+  resize(); bestEl.textContent = best.toLocaleString(); requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
