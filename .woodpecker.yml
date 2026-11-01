@@ -15,7 +15,7 @@ variables:
 
 steps:
   - name: test
-    image: node:22-alpine
+    image: node:26-alpine
     commands:
       - npm run check
 
